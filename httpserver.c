@@ -21,6 +21,32 @@ struct thread_manager {
 	struct client_info *client;
 };
 
+struct dynarr{
+	size_t size;
+	size_t capacity;
+	char** data;
+};
+
+struct dynarr* init_dynarr(size_t init_cap){
+	struct dynarr *dyn = malloc(sizeof(struct dynarr));
+	dyn->size = 0;
+	dyn->capacity = init_cap;
+	dyn->data = malloc(sizeof(char*)*init_cap);
+	return dyn;
+}
+
+int dynarr_add(struct dynarr* dyn, char* str){
+	if (dyn->size == dyn->capacity){
+		dyn->capacity = dyn->capacity*2;
+		char** tmp = realloc(dyn->data, (sizeof(char*)*dyn->capacity));
+		if (!tmp) return 0;
+		dyn->data = tmp;
+	}
+	dyn->data[dyn->size++] = str;
+	return 1;
+	
+}
+
 void *thread_run(void* arg){
 	struct thread_manager *t = (struct thread_manager*)arg;
 	printf("Hello from Thread %d!\n",t->id);
@@ -38,8 +64,14 @@ void *thread_run(void* arg){
 		printf("Connection from %s is being handled by Thread %d.\n",ip,t->id);
 		//http logic goes here
 		//
-		sleep(10); // temp simulating processing time
-
+		//sleep(10); // temp simulating processing time
+		char buffer[4096];
+		ssize_t bytes_read = read(local->filedesc, buffer,sizeof(buffer)-1);
+		if (bytes_read<=0){
+			printf("There was an error while Thread %d processed its request: Couldn't read bytes.",t->id);
+			close(local->filedesc);
+			return NULL;
+		}
 
 
 
