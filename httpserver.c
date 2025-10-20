@@ -47,6 +47,49 @@ int dynarr_add(struct dynarr* dyn, char* str){
 	
 }
 
+int parse_get(struct dynarr* dyn, struct client_info* client){
+	char* req = dyn->data[0];
+	char* saveptr;
+	char* method = strtok_r(req," ",&saveptr);
+	char* path = strtok_r(NULL," ",&saveptr);
+	char* version = strtok_r(NULL," ",&saveptr);
+	size_t content_length;
+	char* content_buffer = malloc(4096);
+	if (strstr(path,"..")!=NULL){
+		//send 403 forbidden
+		//free buffer and dyn
+		char* forbidden = "<html><body><h1>403 Forbidden</h1></body></html>";
+		sprintf(content_buffer,"HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n%s",strlen(forbidden),forbidden);
+		send(client->filedesc,content_buffer,strlen(content_buffer),0);
+		free(content_buffer);
+		return -1;
+	}
+	if (strcmp(path,"/") == 0) path = "/index.html";
+	char full_path[50] = "/home/kowi/learning/httpserver";
+	strcat(full_path,path);
+	FILE *fptr = fopen(full_path,"rb");
+	if (fptr == NULL){
+		//send 404 not found
+                //free buffer and dyn
+                char* notf = "<html><body><h1>404 Not Found</h1></body></html>";
+                sprintf(content_buffer,"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n%s",strlen(notf),notf);
+                send(client->filedesc,content_buffer,strlen(content_buffer),0);
+                free(content_buffer);
+                return -1;
+	}
+	fseek(fptr, 0, SEEK_END);
+	long fsize = ftell(fptr);
+	rewind(fptr);
+	char* fbuffer = malloc(fsize);
+	fread(fbuffer,1,fsize,fptr);
+
+	sprintf(content_buffer,"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n%s",fsize,fbuffer);
+	send(client->filedesc,content_buffer,strlen(content_buffer),0);
+	free(fbuffer);
+	free(content_buffer);
+	return 1;
+}
+
 void *thread_run(void* arg){
 	struct thread_manager *t = (struct thread_manager*)arg;
 	printf("Hello from Thread %d!\n",t->id);
@@ -68,11 +111,25 @@ void *thread_run(void* arg){
 		char buffer[4096];
 		ssize_t bytes_read = read(local->filedesc, buffer,sizeof(buffer)-1);
 		if (bytes_read<=0){
-			printf("There was an error while Thread %d processed its request: Couldn't read bytes.",t->id);
+			printf("There was an error while Thread %d processed its request: Couldn't read bytes.\n",t->id);
 			close(local->filedesc);
 			return NULL;
 		}
-
+		struct dynarr *lines = init_dynarr(4);
+		int ptr = 0;
+		int b_len = strlen(buffer);
+		for(int i = 0; i < b_len; i++){
+			if(buffer[ptr] == '\r'){
+				break; // if the start of the next line is empty itll break because its done
+			}
+			if(buffer[i] == '\r'){
+				buffer[i] = '\0';
+				dynarr_add(lines, &buffer[ptr]);
+				i++;
+				ptr = i+1;
+			}
+		}
+		int res = parse_get(lines,t->client);
 
 
 
@@ -166,13 +223,12 @@ int main (){
 				threadpool[index].client= c;
 				threadpool[index].has_work = 1;
 				pthread_cond_signal(&threadpool[index].cond);
-				pthread_mutex_unlock(&threadpool[index].mutex);
+				//pthread_mutex_unlock(&threadpool[index].mutex);
 
 			}
 			count++;
 		}
-		// free(c) and free(threadpool) could be handled better?
-		free(c);
+		
 	}
 	free(threadpool);
 }
