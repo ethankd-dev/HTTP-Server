@@ -7,6 +7,10 @@
 #include <pthread.h>     // pthread_create, pthread_detach
 #include <signal.h>	 // handle_sigint
 
+//definitions
+#define ROOT_PATH "/home/kowi/learning/httpserver"
+#define DEFAULT_PATH "/index.html"
+
 //stores important client data
 struct client_info {
 	int filedesc;
@@ -74,10 +78,10 @@ int parse_get(struct dynarr* dyn, struct client_info* client){
 		return -1;
 	}
 	//if the path is default, replace it with index.html
-	if (strcmp(path,"/") == 0) path = "/index.html";
+	if (strcmp(path,"/") == 0) path = DEFAULT_PATH;
 
 	//concatenate the proveded path with the servers root path
-	char full_path[50] = "/home/kowi/learning/httpserver";
+	char full_path[50] = ROOT_PATH;
 	strcat(full_path,path);
 
 	//open the file
